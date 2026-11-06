@@ -8,8 +8,8 @@
 # - SCRIPT METADATA & VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      0.1.0-commit1
-# Description:  Base framework, menu layout, and wildcard gate.
+# Version:      0.2.0-commit2
+# Description:  GitHub API parsing, and storage disk probing.
 # ==============================================================================
 
 # ==============================================================================
@@ -52,13 +52,62 @@ show_banner() {
 # ==============================================================================
 
 get_release() {
-  echo "=== Placeholder: This will download latest HAOS ==="
+  local api_url="https://api.github.com/repos/home-assistant/operating-system/releases/latest"
+  local response
+
+  echo -e "\n${orn}Fetching latest release data from GitHub...\n${end}"
+  response=$(curl -sL "${api_url}")
+
+  if [ -z "${response}" ] || ! echo "${response}" | jq -e . >/dev/null 2>&1; then
+    echo -e "\n${red}Error: Invalid JSON${end}\n"
+    return 1
+  fi
+
+  RELEASE_NAME=$(echo "${response}" | jq -r '.tag_name')
+  DOWNLOAD_URL=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz$")) | .browser_download_url')
+
+  if [ -n "${DOWNLOAD_URL}" ] && [ "${DOWNLOAD_URL}" != "null" ]; then
+    echo "Release Data Found:"
+    echo "  Version:  ${RELEASE_NAME}"
+    echo "  Source:   ${DOWNLOAD_URL}"
+  else
+    echo -e "\n${red}Error: Download URL not found${end}\n"
+    return 1
+  fi
 }
+
 
 pause() {
   echo
   read -rp "Press ENTER to continue..." fakEnterKey
 }
+
+
+probe_disk() {
+  local disks=($(lsblk -d -n -o NAME | grep -v '^loop' | grep -v 'rom' | grep -v '^sr'))
+  local disk_count=${#disks[@]}
+
+  echo -e "\n${orn}Probing system for available storage devices...\n${end}"
+
+  if [ "${disk_count}" -eq 0 ]; then
+    echo -e "\n${red}Error: No disks detected${end}\n"
+    return 1
+  else
+    echo -e "\nStorage device probe complete"
+  fi
+
+  # Selects the first target disk (auto-assign if single, show error and exit if multiple)
+  if [ "${disk_count}" -eq 1 ]; then
+    TARGET_DISK="${disks[0]}"  
+    echo -e "Disk Detected: ${blu}/dev/${TARGET_DISK}${end}\n"
+  else
+    # NOTE: Could add code here for selecting correct disk from a menu
+    echo -e "\n${red}Error: Multiple disks detected${end}"
+    echo ${disks[@]}
+    return 1
+  fi
+}
+
 
 goodbye() {
   echo -e "${end}"
@@ -94,7 +143,9 @@ while true; do
   echo " 1) Install HAOS"
   echo " 2) Exit"
   echo ""
+  
   read -rp "Select: " user_input
+  echo ""
 
   case "${user_input}" in
     "1")
