@@ -43,6 +43,7 @@ irssi
 iw
 iwd
 jfsutils
+jq
 kitty-terminfo
 kmscon-terminfo
 ldns
@@ -91,6 +92,7 @@ ppp
 pptpclient
 pv
 qemu-guest-agent
+qemu-img
 refind
 reflector
 rsync
