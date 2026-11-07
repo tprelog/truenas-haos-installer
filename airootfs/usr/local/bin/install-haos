@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-# A menu driven shell script, hacked together from internet samples and other shit.
+# A menu-driven shell script, hacked together from my limited knowledge and AI slop
 # In a previous life, this was the console menu for the Home Assistant TrueNAS Core
-# Community Plugin. Now it's reborn to install Home Assistant OS in a VM on TrueNAS
+#  Community Plugin - Now, it's reborn to install Home Assistant OS in a TrueNAS VM
 
 # ==============================================================================
 # - SCRIPT METADATA & VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      26.11.0-beta1
-# Description:  Initial Release
+# Version:      26.11.1-beta1
+# Description:  Install Home Assistant OS in a Virtual Machine
 # ==============================================================================
 
 # ==============================================================================
@@ -20,7 +20,6 @@ TARGET_DISK=""
 DOWNLOAD_URL=""
 RELEASE_NAME=""
 SCRIPT_VERSION=""
-
 
 # ==============================================================================
 # - COLORS, VISUAL THEME & BANNER LAYOUTS
@@ -47,28 +46,42 @@ show_banner() {
   echo -e "${end}"
 }
 
-
 # ==============================================================================
 # - USER DEFINED FUNCTIONS
 # ==============================================================================
 
+probe_disk() {
+  local disks=($(lsblk -d -n -o NAME | grep -v '^loop' | grep -v 'rom' | grep -v '^sr'))
+  local disk_count=${#disks[@]}
+  echo "Probing system for available storage devices..."
+  if [ "${disk_count}" -eq 0 ]; then
+    echo -e "\n${red}ERROR:${end} No disks detected\n"
+    return 1
+  elif [ "${disk_count}" -eq 1 ]; then
+    TARGET_DISK="/dev/${disks[0]}"
+    #echo -e "Disk detected: ${TARGET_DISK}"
+  else
+    # NOTE: Could add code here for selecting correct disk from a menu
+    echo -e "\n${red}ERROR:${end} Multiple disks detected"
+    echo ${disks[@]}
+    return 1
+  fi
+}
+
+
 get_haos_version() {
   local api_url="https://api.github.com/repos/home-assistant/operating-system/releases/latest"
   local response
-
   echo "Fetching latest release info from GitHub..."
   response=$(curl -sL "${api_url}")
-
   if [ -z "${response}" ] || ! echo "${response}" | jq -e . >/dev/null 2>&1; then
-    echo -e "\n${red}Error: Invalid JSON${end}\n"
+    echo -e "\n${red}ERROR:${end} Invalid JSON\n"
     return 1
   fi
-
   RELEASE_NAME="haos_ova-$(echo "${response}" | jq -r '.tag_name')"
   DOWNLOAD_URL=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz$")) | .browser_download_url')
-
   if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
-    echo -e "\n${red}Error: Download URL not found${end}\n"
+    echo -e "\n${red}ERROR:${end} Download URL not found\n"
     return 1
   fi
 }
@@ -76,40 +89,18 @@ get_haos_version() {
 
 download_haos() {
   if [ -z "${DOWNLOAD_URL}" ] || [ -z "${RELEASE_NAME}" ]; then
-    echo -e "\n${red}Error: Missing release download metadata${end}\n"
+    echo -e "\n${red}ERROR:${end} Missing release download metadata\n"
     return 1
   fi
-  set -o pipefail
   echo "Downloading and decompressing image archive..."
+  set -o pipefail
   curl -Lf --progress-bar "${DOWNLOAD_URL}" | unxz > "${RELEASE_NAME}.qcow2"
   local exit_code=$?
   set +o pipefail
-  # Check if the pipe stream failed or was interrupted
-  local pipe_status=("${PIPESTATUS[@]}")
+  # Check if the download failed or was interrupted
   if [ ${exit_code} -ne 0 ] || [ ! -s "${RELEASE_NAME}.qcow2" ]; then
-    echo -e "\n${red}Error: Download or decompression failed${end}\n"
+    echo -e "\n${red}ERROR:${end} Download or decompression failed\n"
     rm -f "${RELEASE_NAME}.qcow2"
-    return 1
-  fi
-}
-
-
-probe_disk() {
-  local disks=($(lsblk -d -n -o NAME | grep -v '^loop' | grep -v 'rom' | grep -v '^sr'))
-  local disk_count=${#disks[@]}
-
-  echo "Probing system for available storage devices..."
-
-  if [ "${disk_count}" -eq 0 ]; then
-    echo -e "\n${red}Error: No disks detected${end}\n"
-    return 1
-  elif [ "${disk_count}" -eq 1 ]; then
-    TARGET_DISK="/dev/${disks[0]}"
-    #echo -e "Disk detected: ${TARGET_DISK}"
-  else
-    # NOTE: Could add code here for selecting correct disk from a menu
-    echo -e "\n${red}Error: Multiple disks detected${end}"
-    echo ${disks[@]}
     return 1
   fi
 }
@@ -117,21 +108,19 @@ probe_disk() {
 
 install_haos() {
   if [ -z "${TARGET_DISK}" ] || [ ! -f "${RELEASE_NAME}.qcow2" ]; then
-    echo -e "\n${red}Error: Target disk not set or image file missing${end}\n"
+    echo -e "\n${red}ERROR:${end} Target disk not set or image file missing\n"
     return 1
   fi
-
   echo "Writing image to ${TARGET_DISK}..."
   qemu-img convert -p -O raw "${RELEASE_NAME}.qcow2" "${TARGET_DISK}"
   local convert_status=$?
-
   if [ ${convert_status} -eq 0 ]; then
     sync
     echo -e "\n${blu}SUCCESS:${end} Home Assistant OS has been successfully installed to ${TARGET_DISK}!\n"
     echo "You can now safely shut down the live ISO environment and reboot into HAOS!"
     echo "Note you may need to remove the CD-ROM or change its boot order so HAOS will boot"
   else
-    echo -e "\n${red}CRITICAL ERROR: Image conversion or write operation failed${end}\n"
+    echo -e "\n${red}ERROR:${end} Image conversion or write operation failed\n"
     return 1
   fi
 }
@@ -167,7 +156,6 @@ shutdown_system() {
   poweroff
 }
 
-
 # ==============================================================================
 # - TRAP CTRL+C, CTRL+Z AND QUIT SIGNALS
 # ==============================================================================
@@ -178,11 +166,9 @@ shutdown_system() {
 #   2 = SIGINT (Interrupted by the keyboard)
 #   3 = SIGQUIT (Quit signal from keyboard)
 #   6 = SIGABRT (Aborted by abort(3))
-#
 
 # It's a trap! goodbye
 trap goodbye 1 2 3 6
-
 
 # ==============================================================================
 # - MAIN LOGIC AND INTERFACE LOOP
@@ -204,17 +190,17 @@ while true; do
     "1")
       echo "Starting Home Assistant OS installation..."
       # Get release info and set an installation target 
-      get_haos_version || { pause; continue; }
       probe_disk || { pause; continue; }
+      get_haos_version || { pause; continue; }
       # Show information to confirm
       echo -e "\n--- Ready to Install ---"
       echo -e "HAOS Release: ${blu}${RELEASE_NAME}${end}"
       echo -e "Destination Disk: ${blu}${TARGET_DISK}${end}"
       # Final warning before initiating the destructive write pipeline
-      echo -e "\n${red}WARNING:${end} All data on ${TARGET_DISK} will be destroyed!"
+      echo -e "\n${orn}WARNING:${end} All data on ${TARGET_DISK} will be destroyed!"
       read -rp "Are you sure you want to proceed? (y/N): " confirm
       if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${orn}Installation cancelled${end}"
+        echo -e "${red}Installation cancelled${end}"
         pause; continue
       fi
       echo ""
