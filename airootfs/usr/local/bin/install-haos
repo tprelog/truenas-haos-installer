@@ -8,8 +8,8 @@
 # - SCRIPT METADATA & VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      0.2.0-commit2
-# Description:  GitHub API parsing, and storage disk probing.
+# Version:      0.3.0-commit3
+# Description:  Full installation pipeline
 # ==============================================================================
 
 # ==============================================================================
@@ -19,6 +19,7 @@
 TARGET_DISK=""
 DOWNLOAD_URL=""
 RELEASE_NAME=""
+SCRIPT_VERSION=""
 
 
 # ==============================================================================
@@ -63,15 +64,46 @@ get_release() {
     return 1
   fi
 
-  RELEASE_NAME=$(echo "${response}" | jq -r '.tag_name')
+  RELEASE_NAME="haos_ova-$(echo "${response}" | jq -r '.tag_name')"
   DOWNLOAD_URL=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz$")) | .browser_download_url')
 
-  if [ -n "${DOWNLOAD_URL}" ] && [ "${DOWNLOAD_URL}" != "null" ]; then
-    echo "Release Data Found:"
-    echo "  Version:  ${RELEASE_NAME}"
-    echo "  Source:   ${DOWNLOAD_URL}"
-  else
+  if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
     echo -e "\n${red}Error: Download URL not found${end}\n"
+    return 1
+  fi
+
+  echo "Release Data Found:"
+  echo "  Version:  ${RELEASE_NAME}"
+  echo "  Source:   ${DOWNLOAD_URL}"
+
+  echo -e "\n${blu}Downloading and decompressing image archive...${end}"
+  curl -sL "${DOWNLOAD_URL}" | unxz > "${RELEASE_NAME}.qcow2"
+}
+
+get_script_version() {
+  # Extract the version from the line starting with '# Version:'
+  SCRIPT_VERSION=$(grep -m1 '^# Version:' "$0" | awk '{print $NF}')
+  echo -e "\nSCRIPT VERSION: ${SCRIPT_VERSION}"
+}
+
+
+install_haos() {
+  if [ -z "${TARGET_DISK}" ] || [ ! -f "${RELEASE_NAME}.qcow2" ]; then
+    echo -e "${red}Error: Target disk not set or image file missing${end}"
+    return 1
+  fi
+
+  echo "Writing image to ${TARGET_DISK}..."
+  qemu-img convert -p -O raw "${RELEASE_NAME}.qcow2" "${TARGET_DISK}"
+  local convert_status=$?
+
+  if [ ${convert_status} -eq 0 ]; then
+    sync
+    echo -e "\n${blu}SUCCESS: Home Assistant OS has been successfully installed to ${TARGET_DISK}!${end}\n"
+    echo "You can now safely shut down the live ISO environment and reboot into HAOS!"
+    echo "Note you may need to remove the CD-ROM or change it's boot order so HAOS will boot"
+  else
+    echo -e "\n${red}CRITICAL ERROR: Image translation or write operations failed.${end}"
     return 1
   fi
 }
@@ -98,7 +130,7 @@ probe_disk() {
 
   # Selects the first target disk (auto-assign if single, show error and exit if multiple)
   if [ "${disk_count}" -eq 1 ]; then
-    TARGET_DISK="${disks[0]}"  
+    TARGET_DISK="/dev/${disks[0]}"
     echo -e "Disk Detected: ${blu}/dev/${TARGET_DISK}${end}\n"
   else
     # NOTE: Could add code here for selecting correct disk from a menu
@@ -150,7 +182,17 @@ while true; do
   case "${user_input}" in
     "1")
       echo "Starting Home Assistant OS installation..."
-      echo "=== Placeholder: Nothing will run ==="
+      probe_disk || { pause; continue; }
+      # Final warning before initiating the destructive write pipeline
+      echo -e "${red}WARNING: This will completely erase all data on ${orn} ${TARGET_DISK}!${end}"
+      read -rp "Are you sure you want to proceed? (y/N): " confirm
+      if [[ ! "${confirm}" =~ ^[yY]$ ]]; then
+        echo -e "\nDeployment cancelled by user."
+        pause
+        continue
+      fi
+      get_release || { pause; continue; }
+      install_haos || { pause; continue; }
       pause
       ;;
     "2"|[eE]|[eE][xX][iI][tT]|[qQ])
