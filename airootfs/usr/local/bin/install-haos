@@ -8,8 +8,8 @@
 # - SCRIPT METADATA & VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      0.5.0-dev
-# Description:  Add download function and show more info before confirming
+# Version:      26.11.0-beta1
+# Description:  Initial Release
 # ==============================================================================
 
 # ==============================================================================
