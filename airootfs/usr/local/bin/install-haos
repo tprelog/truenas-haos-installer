@@ -8,8 +8,8 @@
 # - SCRIPT METADATA & VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      0.4.0-dev
-# Description:  Add system shutdown and re-order some functions
+# Version:      0.5.0-dev
+# Description:  Add download function and show more info before confirming
 # ==============================================================================
 
 # ==============================================================================
@@ -52,11 +52,11 @@ show_banner() {
 # - USER DEFINED FUNCTIONS
 # ==============================================================================
 
-get_release() {
+get_haos_version() {
   local api_url="https://api.github.com/repos/home-assistant/operating-system/releases/latest"
   local response
 
-  echo -e "\n${orn}Fetching latest release data from GitHub...\n${end}"
+  echo "Fetching latest release info from GitHub..."
   response=$(curl -sL "${api_url}")
 
   if [ -z "${response}" ] || ! echo "${response}" | jq -e . >/dev/null 2>&1; then
@@ -71,13 +71,26 @@ get_release() {
     echo -e "\n${red}Error: Download URL not found${end}\n"
     return 1
   fi
+}
 
-  echo "Release Data Found:"
-  echo "  Version:  ${RELEASE_NAME}"
-  echo "  Source:   ${DOWNLOAD_URL}"
 
-  echo -e "\n${blu}Downloading and decompressing image archive...${end}"
-  curl -sL "${DOWNLOAD_URL}" | unxz > "${RELEASE_NAME}.qcow2"
+download_haos() {
+  if [ -z "${DOWNLOAD_URL}" ] || [ -z "${RELEASE_NAME}" ]; then
+    echo -e "\n${red}Error: Missing release download metadata${end}\n"
+    return 1
+  fi
+  set -o pipefail
+  echo "Downloading and decompressing image archive..."
+  curl -Lf --progress-bar "${DOWNLOAD_URL}" | unxz > "${RELEASE_NAME}.qcow2"
+  local exit_code=$?
+  set +o pipefail
+  # Check if the pipe stream failed or was interrupted
+  local pipe_status=("${PIPESTATUS[@]}")
+  if [ ${exit_code} -ne 0 ] || [ ! -s "${RELEASE_NAME}.qcow2" ]; then
+    echo -e "\n${red}Error: Download or decompression failed${end}\n"
+    rm -f "${RELEASE_NAME}.qcow2"
+    return 1
+  fi
 }
 
 
@@ -85,19 +98,14 @@ probe_disk() {
   local disks=($(lsblk -d -n -o NAME | grep -v '^loop' | grep -v 'rom' | grep -v '^sr'))
   local disk_count=${#disks[@]}
 
-  echo -e "\n${orn}Probing system for available storage devices...\n${end}"
+  echo "Probing system for available storage devices..."
 
   if [ "${disk_count}" -eq 0 ]; then
     echo -e "\n${red}Error: No disks detected${end}\n"
     return 1
-  else
-    echo -e "\nStorage device probe complete"
-  fi
-
-  # Selects the first target disk (auto-assign if single, show error and exit if multiple)
-  if [ "${disk_count}" -eq 1 ]; then
+  elif [ "${disk_count}" -eq 1 ]; then
     TARGET_DISK="/dev/${disks[0]}"
-    echo -e "Disk Detected: ${blu}${TARGET_DISK}${end}\n"
+    #echo -e "Disk detected: ${TARGET_DISK}"
   else
     # NOTE: Could add code here for selecting correct disk from a menu
     echo -e "\n${red}Error: Multiple disks detected${end}"
@@ -109,7 +117,7 @@ probe_disk() {
 
 install_haos() {
   if [ -z "${TARGET_DISK}" ] || [ ! -f "${RELEASE_NAME}.qcow2" ]; then
-    echo -e "${red}Error: Target disk not set or image file missing${end}"
+    echo -e "\n${red}Error: Target disk not set or image file missing${end}\n"
     return 1
   fi
 
@@ -119,20 +127,24 @@ install_haos() {
 
   if [ ${convert_status} -eq 0 ]; then
     sync
-    echo -e "\n${blu}SUCCESS: Home Assistant OS has been successfully installed to ${TARGET_DISK}!${end}\n"
+    echo -e "\n${blu}SUCCESS:${end} Home Assistant OS has been successfully installed to ${TARGET_DISK}!\n"
     echo "You can now safely shut down the live ISO environment and reboot into HAOS!"
-    echo "Note you may need to remove the CD-ROM or change it's boot order so HAOS will boot"
+    echo "Note you may need to remove the CD-ROM or change its boot order so HAOS will boot"
   else
-    echo -e "\n${red}CRITICAL ERROR: Image translation or write operations failed.${end}"
+    echo -e "\n${red}CRITICAL ERROR: Image conversion or write operation failed${end}\n"
     return 1
   fi
 }
 
 
-get_script_version() {
-  # Extract the version from the line starting with '# Version:'
+get_version() {
+  # Extract the script version from the line starting with '# Version:'
   SCRIPT_VERSION=$(grep -m1 '^# Version:' "$0" | awk '{print $NF}')
   echo -e "\nSCRIPT VERSION: ${SCRIPT_VERSION}"
+  # Show the current version of HAOS
+  if [ -n "${RELEASE_NAME}" ]; then
+    echo -e "Target HAOS Release: ${RELEASE_NAME}"
+  fi
 }
 
 
@@ -157,7 +169,7 @@ shutdown_system() {
 
 
 # ==============================================================================
-# - TRAP CTRL+C, CTRL+Z AND QUIT SINGLES
+# - TRAP CTRL+C, CTRL+Z AND QUIT SIGNALS
 # ==============================================================================
 
 # Define standard signal traps to drop back to the console safely if interrupted
@@ -191,16 +203,23 @@ while true; do
   case "${user_input}" in
     "1")
       echo "Starting Home Assistant OS installation..."
+      # Get release info and set an installation target 
+      get_haos_version || { pause; continue; }
       probe_disk || { pause; continue; }
+      # Show information to confirm
+      echo -e "\n--- Ready to Install ---"
+      echo -e "HAOS Release: ${blu}${RELEASE_NAME}${end}"
+      echo -e "Destination Disk: ${blu}${TARGET_DISK}${end}"
       # Final warning before initiating the destructive write pipeline
-      echo -e "${red}WARNING: This will completely erase all data on ${orn} ${TARGET_DISK}!${end}"
+      echo -e "\n${red}WARNING:${end} All data on ${TARGET_DISK} will be destroyed!"
       read -rp "Are you sure you want to proceed? (y/N): " confirm
-      if [[ ! "${confirm}" =~ ^[yY]$ ]]; then
-        echo -e "\nDeployment cancelled by user."
-        pause
-        continue
+      if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${orn}Installation cancelled${end}"
+        pause; continue
       fi
-      get_release || { pause; continue; }
+      echo ""
+      # Download and Install
+      download_haos || { pause; continue; }
       install_haos || { pause; continue; }
       pause
       ;;
