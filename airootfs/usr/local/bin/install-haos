@@ -5,24 +5,25 @@
 #  Community Plugin - Now, it's reborn to install Home Assistant OS in a TrueNAS VM
 
 # ==============================================================================
-# - SCRIPT METADATA & VERSION CONTROL
+# - SCRIPT METADATA AND VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      26.11.1-beta1
+# Version:      26.11.2
 # Description:  Install Home Assistant OS in a Virtual Machine
 # ==============================================================================
 
 # ==============================================================================
-# - GLOBAL VARIABLES & CONFIGURATION
+# - GLOBAL VARIABLES
 # ==============================================================================
 
-TARGET_DISK=""
-DOWNLOAD_URL=""
-RELEASE_NAME=""
-SCRIPT_VERSION=""
+  SCRIPT_VERSION=""
+  TARGET_DISK=""
+  HAOS_VERSION=""
+  IMAGE_NAME=""
+  DOWNLOAD_URL=""
 
 # ==============================================================================
-# - COLORS, VISUAL THEME & BANNER LAYOUTS
+# - COLORS AND BANNER LAYOUT
 # ==============================================================================
 
 # Color definitions using the 256-color palette
@@ -33,9 +34,10 @@ load_colors() {
   end=$'\e[0m'
 }
 
+# shellcheck disable=SC2028
 show_banner() {
   clear
-  echo "${blu}"
+  echo -e "${blu}"
   echo '   _  _  ___  __  __ ___      _   ___ ___ ___ ___ _____ _   _  _ _____  '
   echo '  | || |/ _ \|  \/  | __|    /_\ / __/ __|_ _/ __|_   _/_\ | \| |_   _| '
   echo '  | __ | (_) | |\/| | _|    / _ \\__ \__ \| |\__ \ | |/ _ \| .` | | |   '
@@ -47,29 +49,29 @@ show_banner() {
 }
 
 # ==============================================================================
-# - USER DEFINED FUNCTIONS
+# - MAIN FUNCTIONS
 # ==============================================================================
 
 probe_disk() {
+  echo "Probing system for available storage devices..."
+  # shellcheck disable=SC2207
   local disks=($(lsblk -d -n -o NAME | grep -v '^loop' | grep -v 'rom' | grep -v '^sr'))
   local disk_count=${#disks[@]}
-  echo "Probing system for available storage devices..."
   if [ "${disk_count}" -eq 0 ]; then
     echo -e "\n${red}ERROR:${end} No disks detected\n"
     return 1
   elif [ "${disk_count}" -eq 1 ]; then
     TARGET_DISK="/dev/${disks[0]}"
-    #echo -e "Disk detected: ${TARGET_DISK}"
   else
     # NOTE: Could add code here for selecting correct disk from a menu
     echo -e "\n${red}ERROR:${end} Multiple disks detected"
-    echo ${disks[@]}
+    echo "${disks[@]}"
     return 1
   fi
 }
 
 
-get_haos_version() {
+get_haos_info() {
   local api_url="https://api.github.com/repos/home-assistant/operating-system/releases/latest"
   local response
   echo "Fetching latest release info from GitHub..."
@@ -78,7 +80,8 @@ get_haos_version() {
     echo -e "\n${red}ERROR:${end} Invalid JSON\n"
     return 1
   fi
-  RELEASE_NAME="haos_ova-$(echo "${response}" | jq -r '.tag_name')"
+  HAOS_VERSION="$(echo "${response}" | jq -r '.tag_name')"
+  IMAGE_NAME=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz")) | .name' | sed 's/\.xz$//')
   DOWNLOAD_URL=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz$")) | .browser_download_url')
   if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
     echo -e "\n${red}ERROR:${end} Download URL not found\n"
@@ -88,31 +91,31 @@ get_haos_version() {
 
 
 download_haos() {
-  if [ -z "${DOWNLOAD_URL}" ] || [ -z "${RELEASE_NAME}" ]; then
+  if [ -z "${DOWNLOAD_URL}" ] || [ -z "${IMAGE_NAME}" ]; then
     echo -e "\n${red}ERROR:${end} Missing release download metadata\n"
     return 1
   fi
-  echo "Downloading and decompressing image archive..."
+  echo "Downloading and decompressing HAOS image..."
   set -o pipefail
-  curl -Lf --progress-bar "${DOWNLOAD_URL}" | unxz > "${RELEASE_NAME}.qcow2"
+  curl -Lf --progress-bar "${DOWNLOAD_URL}" | unxz > "${IMAGE_NAME}"
   local exit_code=$?
   set +o pipefail
   # Check if the download failed or was interrupted
-  if [ ${exit_code} -ne 0 ] || [ ! -s "${RELEASE_NAME}.qcow2" ]; then
+  if [ ${exit_code} -ne 0 ] || [ ! -s "${IMAGE_NAME}" ]; then
     echo -e "\n${red}ERROR:${end} Download or decompression failed\n"
-    rm -f "${RELEASE_NAME}.qcow2"
+    rm -f "${IMAGE_NAME}"
     return 1
   fi
 }
 
 
 install_haos() {
-  if [ -z "${TARGET_DISK}" ] || [ ! -f "${RELEASE_NAME}.qcow2" ]; then
+  if [ -z "${TARGET_DISK}" ] || [ ! -f "${IMAGE_NAME}" ]; then
     echo -e "\n${red}ERROR:${end} Target disk not set or image file missing\n"
     return 1
   fi
   echo "Writing image to ${TARGET_DISK}..."
-  qemu-img convert -p -O raw "${RELEASE_NAME}.qcow2" "${TARGET_DISK}"
+  qemu-img convert -p -O raw "${IMAGE_NAME}" "${TARGET_DISK}"
   local convert_status=$?
   if [ ${convert_status} -eq 0 ]; then
     sync
@@ -125,35 +128,31 @@ install_haos() {
   fi
 }
 
+# ==============================================================================
+# - UTILITY OR HELPER FUNCTIONS
+# ==============================================================================
 
-get_version() {
+get_script_version() {
   # Extract the script version from the line starting with '# Version:'
   SCRIPT_VERSION=$(grep -m1 '^# Version:' "$0" | awk '{print $NF}')
-  echo -e "\nSCRIPT VERSION: ${SCRIPT_VERSION}"
-  # Show the current version of HAOS
-  if [ -n "${RELEASE_NAME}" ]; then
-    echo -e "Target HAOS Release: ${RELEASE_NAME}"
-  fi
 }
 
+show_info() {
+  echo -e "${blu}SCRIPT VERSION:${end} ${SCRIPT_VERSION}"
+  echo -e "${blu}TARGET DISK:${end} ${TARGET_DISK}"
+  echo -e "${blu}HAOS VERSION:${end} ${HAOS_VERSION}"
+  echo -e "${blu}IMAGE NAME:${end} ${IMAGE_NAME}"
+  echo -e "${blu}DOWNLOAD URL:${end} ${DOWNLOAD_URL}"
+}
 
+# shellcheck disable=SC2034
 pause() {
-  echo
+  echo ""
   read -rp "Press ENTER to continue..." fakEnterKey
 }
 
-
 goodbye() {
-  echo -e "${end}"
-  clear
-  exit
-}
-
-
-shutdown_system() {
-  echo -e "${red}Powering off...${end}"
-  clear
-  poweroff
+  echo -e "${end}" ; clear ; exit
 }
 
 # ==============================================================================
@@ -179,8 +178,10 @@ load_colors
 while true; do
   show_banner
   echo " 1) Install HAOS"
-  echo " 2) Shutdown System"
-  echo " 3) Exit to Console"
+  echo " 2) Show Verification"
+  echo " 3) Reboot System"
+  echo " 4) Shutdown System"
+  echo " 5) Exit to Console"
   echo ""
   
   read -rp "Select: " user_input
@@ -189,15 +190,13 @@ while true; do
   case "${user_input}" in
     "1")
       echo "Starting Home Assistant OS installation..."
-      # Get release info and set an installation target 
+      get_script_version
       probe_disk || { pause; continue; }
-      get_haos_version || { pause; continue; }
-      # Show information to confirm
-      echo -e "\n--- Ready to Install ---"
-      echo -e "HAOS Release: ${blu}${RELEASE_NAME}${end}"
-      echo -e "Destination Disk: ${blu}${TARGET_DISK}${end}"
-      # Final warning before initiating the destructive write pipeline
-      echo -e "\n${orn}WARNING:${end} All data on ${TARGET_DISK} will be destroyed!"
+      get_haos_info || { pause; continue; }
+      echo -e "\n---- Ready to Install ----"
+      show_info
+      # Final warning before initiating nuke and pave operation
+      echo -e "\n${orn}WARNING:${end} All data on ${TARGET_DISK} will be overwritten!"
       read -rp "Are you sure you want to proceed? (y/N): " confirm
       if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo -e "${red}Installation cancelled${end}"
@@ -209,10 +208,21 @@ while true; do
       install_haos || { pause; continue; }
       pause
       ;;
-    "2"|[sS]|[sS][hH][uU][tT][dD][oO][wW][nN])
-      shutdown_system
+    "2"|[vV]|[vV][eE][rR][iI][fF][yY])
+      get_script_version
+      probe_disk || { pause; continue; }
+      get_haos_info || { pause; continue; }
+      echo ""
+      show_info
+      pause
       ;;
-    "3"|[eE]|[eE][xX][iI][tT]|[qQ])
+    "3"|[rR]|[rR][eE][bB][oO][oO][tT])
+      echo -e "\n${red}Rebooting...${end}" ; reboot
+      ;;
+    "4"|[sS]|[sS][hH][uU][tT][dD][oO][wW][nN])
+      echo -e "\n${red}Powering off...${end}" ; poweroff
+      ;;
+    "5"|[eE]|[eE][xX][iI][tT]|[qQ])
       goodbye
       ;;
     *)
@@ -223,8 +233,7 @@ while true; do
         "${user_input}"
         pause
       else
-        echo "Sorry, that is not an option."
-        sleep 1
+        echo "Sorry, that is not an option." ; sleep 1
       fi
       ;;
   esac
