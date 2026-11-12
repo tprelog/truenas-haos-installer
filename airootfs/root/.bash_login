@@ -1,2 +1,7 @@
-
-~/.automated_script.sh
+# shellcheck shell=bash
+if [[ $(tty) == /dev/ttyS0 ]]; then
+    ~/.automated_script.sh
+elif
+    [[ $(tty) == /dev/tty1 ]]; then
+    /usr/local/bin/install-haos
+fi
