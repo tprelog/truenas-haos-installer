@@ -8,7 +8,7 @@
 # - SCRIPT METADATA AND VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      26.11.2
+# Version:      26.11.3
 # Description:  Install Home Assistant OS in a Virtual Machine
 # ==============================================================================
 
@@ -72,17 +72,18 @@ probe_disk() {
 
 
 get_haos_info() {
-  local api_url="https://api.github.com/repos/home-assistant/operating-system/releases/latest"
-  local response
+  local api_url="https://api.github.com/repos/home-assistant/operating-system/releases"
+  local response ova_asset
   echo "Fetching latest release info from GitHub..."
   response=$(curl -sL "${api_url}")
   if [ -z "${response}" ] || ! echo "${response}" | jq -e . >/dev/null 2>&1; then
     echo -e "\n${red}ERROR:${end} Invalid JSON\n"
     return 1
   fi
-  HAOS_VERSION="$(echo "${response}" | jq -r '.tag_name')"
-  IMAGE_NAME=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz")) | .name' | sed 's/\.xz$//')
-  DOWNLOAD_URL=$(echo "${response}" | jq -r '.assets[] | select(.name | test("ova.*qcow2\\.xz$")) | .browser_download_url')
+  ova_asset=$(echo "${response}" | jq -c '[ .[] | select(.prerelease == false) | .assets[] | select(.name | test("ova.*qcow2\\.xz")) ] | first')
+  HAOS_VERSION=$(echo "${response}" | jq -r '[ .[] | select(.prerelease == false) | select(.assets[].name | test("ova.*qcow2\\.xz")) ] | first | .tag_name')
+  IMAGE_NAME=$(echo "${ova_asset}" | jq -r '.name' | sed 's/\.xz$//')
+  DOWNLOAD_URL=$(echo "${ova_asset}" | jq -r '.browser_download_url')
   if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
     echo -e "\n${red}ERROR:${end} Download URL not found\n"
     return 1
