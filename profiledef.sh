@@ -5,7 +5,7 @@ iso_name="truenas-haos-installer"
 iso_label="HAOS_INSTALLER_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="tprelog <https://github.com>"
 iso_application="HAOS Installation ISO for a TrueNAS VM"
-iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
+iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)-mini"
 install_dir="arch"
 bootmodes=('uefi-x64.systemd-boot.esp'
            'uefi-x64.systemd-boot.eltorito')
