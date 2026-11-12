@@ -13,7 +13,7 @@ pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
 airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86,arm64' '-b' '1M' '-Xdict-size' '1M')
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--long' '-19')
-kernel_params_x86_64="cow_spacesize=1G script=/usr/local/bin/install-haos"
+kernel_params_x86_64="console=tty0 console=ttyS0,115200 cow_spacesize=1G script=/usr/local/bin/install-haos"
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
   ["/root"]="0:0:750"
