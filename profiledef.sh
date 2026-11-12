@@ -7,8 +7,8 @@ iso_publisher="tprelog <https://github.com>"
 iso_application="HAOS Installation ISO for a TrueNAS VM"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
 install_dir="arch"
-bootmodes=('bios.syslinux'
-           'uefi.systemd-boot')
+bootmodes=('uefi-x64.systemd-boot.esp'
+           'uefi-x64.systemd-boot.eltorito')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
 airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86,arm64' '-b' '1M' '-Xdict-size' '1M')
