@@ -36,7 +36,7 @@ An Installation Script for Home Assistant OS.
 
 This is the script which handles all the heavy lifting. When an installation is started, the script probes the VM to find its drive path, then queries the GitHub API to fetch the latest HAOS release data. At this time, the script is only intended to run in a TrueNAS VM and it expects a single drive to be present (it will trigger an error and exit if multiple drives are detected). For now, the script will always download and install the current release of HAOS. If there is any interest, the ability to choose which version to install may be added in the future.
 
-![Main Menu Interface](img/Screenshot_26.11.2.png)
+![Main Menu Interface](img/Screenshot_26.11.3-mini.png)
 
 
 
