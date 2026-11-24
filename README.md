@@ -4,7 +4,7 @@
 
 While I find the standard method of installing HAOS rather trivial, I understand that some users would prefer a more traditional approach. With that in mind, I put together an ISO you can use as installation media when creating your HAOS VM in TrueNAS.
 
-ISOs are available for download on the [Releases page](https://github.com/tprelog/truenas-haos-installer/releases)
+ISOs are available for download on the [Releases](https://github.com/tprelog/truenas-haos-installer/releases) page.
 
 Booting the ISO automatically launches a simple, [menu-driven script](https://github.com/tprelog/truenas-haos-installer/blob/main/airootfs/usr/local/bin/install-haos) in the VM's Serial Shell, which is accessible directly from the TrueNAS UI. No SPICE or VNC clients required.
 
@@ -16,17 +16,15 @@ I recorded a video while testing release `v26.11.3-mini` (ISO 26.11.12-mini) on 
 
 https://youtu.be/PoigcWGgvVE
 
----
+## Additional Information
 
-### Additional Information
+I'm still skeptical about this project's utility, so I haven't spent much time on it. At this point, the ISO and installation script are only tested for use in TrueNAS VMs; however, they may work in other KVM-based systems that support the `haos_ova.qcow2` image. Additionally, the script expects a single drive to be present and will trigger an error and exit if multiple drives are detected.
 
-I'm still skeptical about this project's utility, so I haven't spent much time on it. At this time, the ISO and installation script are only tested for use in TrueNAS VMs; however, they may work in other KVM-based systems that support the `haos_ova.qcow2` image. Additionally, the script expects a single drive to be present and will trigger an error and exit if multiple drives are detected.
-
-If there is any interest in further development, support for other systems, the ability to specify a specific version of HAOS, or even changing this Arch-based ISO to something more appropriate may be considered in the future.
+If there is any interest in further development, the ability to specify a specific version of HAOS, or even changing this Arch-based ISO to something more appropriate may be considered in the future.
 
 So, why choose Arch Linux for this project in the first place? Well, Arch has been my daily driver for several years, and for now, I'd consider this installation ISO a *proof-of-concept*. I didn't want to spend a bunch of time on something that may very well be useless. Since I'm already using Arch, building the custom ISO was simple.
 
-To prepare an Arch system and build the ISO, run these commands from your terminal:
+These are the basic commands to prepare an Arch system and build the ISO:
 
 ```bash
 # 1. Install the archiso tool package
@@ -41,7 +39,7 @@ mkarchiso -v -w /tmp/archiso-work -o ./iso .
 ```
 
 #### ISO Modifications
-To create the initial ISO, I made these minimal modifications to the default Arch profile:
+To create the initial ISO, I made these minimal modifications to the default releng profile:
 
 * **Add Installation Script:** Added the [`install-haos`](https://github.com/tprelog/truenas-haos-installer/blob/main/airootfs/usr/local/bin/install-haos) script to `airootfs/usr/local/bin/`
 * **Add Script Dependencies:** Added `jq` and `qemu-img` to [`packages.x86_64`](https://github.com/tprelog/truenas-haos-installer/commit/e35682a95d63851dcd2c21a5e1267df66c201607)
