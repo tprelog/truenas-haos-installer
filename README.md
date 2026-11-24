@@ -1,12 +1,31 @@
 # truenas-haos-installer
 
-An Installation ISO for Home Assistant OS.
+### An Installation ISO for Home Assistant OS (HAOS)
 
-This is a custom Arch Linux ISO designed to serve as installation media for installing Home Assistant OS (HAOS) inside a virtual machine on TrueNAS. When you boot this ISO, it automatically launches to an interactive menu so you don't have to type any commands. While this ISO (and installation script) could possibly work with other systems, at this time, it is intended for use on TrueNAS.
+While I find the standard method of installing HAOS rather trivial, I understand that some users would prefer a more traditional approach. With that in mind, I put together an ISO you can use as installation media when creating your HAOS VM in TrueNAS.
 
-So, why choose Arch Linux for this project? Well, Arch has been my daily driver for many years, and for now, I'd consider this installation ISO a *proof-of-concept*. I didn't want to spend a bunch of time on something that may very well be useless. Since I'm already using Arch, building the custom ISO was simple.
+ISOs are available for download on the [Releases page](https://github.com/tprelog/truenas-haos-installer/releases)
 
-### Setting Up the Build Environment
+Booting the ISO automatically launches a simple, [menu-driven script](https://github.com/tprelog/truenas-haos-installer/blob/main/airootfs/usr/local/bin/install-haos) in the VM's Serial Shell, which is accessible directly from the TrueNAS UI. No SPICE or VNC clients required.
+
+![Main Menu Interface](img/Screenshot_26.11.3-mini.png)
+
+When you start an installation, the script probes the VM to find its drive path and queries the GitHub API to fetch the latest HAOS release data. Then, it uses that information to (1) download, (2) extract, and (3) write the [HAOS image for KVM](https://www.home-assistant.io/installation/linux/#install-home-assistant-operating-system) to the disk. To be clear, this will always install the current stable HAOS release. You don’t need to update the install script or ISO with each new HAOS release.
+
+I recorded a video while testing release `v26.11.3-mini` (ISO 26.11.12-mini) on TrueNAS 27-RC1. I’m sorry, there is no sound, but it does show a real-time, uncut run-through of the installation from creating the VM to opening the Home Assistant landing page for the first time. I suggest setting YouTube's playback speed to 2-3x to watch the full video without wasting much time.
+
+https://youtu.be/PoigcWGgvVE
+
+---
+
+### Additional Information
+
+I'm still skeptical about this project's utility, so I haven't spent much time on it. At this time, the ISO and installation script are only tested for use in TrueNAS VMs; however, they may work in other KVM-based systems that support the `haos_ova.qcow2` image. Additionally, the script expects a single drive to be present and will trigger an error and exit if multiple drives are detected.
+
+If there is any interest in further development, support for other systems, the ability to specify a specific version of HAOS, or even changing this Arch-based ISO to something more appropriate may be considered in the future.
+
+So, why choose Arch Linux for this project in the first place? Well, Arch has been my daily driver for several years, and for now, I'd consider this installation ISO a *proof-of-concept*. I didn't want to spend a bunch of time on something that may very well be useless. Since I'm already using Arch, building the custom ISO was simple.
+
 To prepare an Arch system and build the ISO, run these commands from your terminal:
 
 ```bash
@@ -21,24 +40,12 @@ mkdir -p /tmp/archiso-work
 mkarchiso -v -w /tmp/archiso-work -o ./iso .
 ```
 
-### ISO Modifications
-To create this ISO, I made these minimal modifications to the default Arch profile:
+#### ISO Modifications
+To create the initial ISO, I made these minimal modifications to the default Arch profile:
 
 * **Add Installation Script:** Added the [`install-haos`](https://github.com/tprelog/truenas-haos-installer/blob/main/airootfs/usr/local/bin/install-haos) script to `airootfs/usr/local/bin/`
 * **Add Script Dependencies:** Added `jq` and `qemu-img` to [`packages.x86_64`](https://github.com/tprelog/truenas-haos-installer/commit/e35682a95d63851dcd2c21a5e1267df66c201607)
 * **Configure Default Profile:** Added hooks for `install-haos` and set ISO info in [`profiledef.sh`](https://github.com/tprelog/truenas-haos-installer/commit/dabbfbd2c060e0d16bf6827bf440833ac16c3fdd)
-
-
-
-## install-haos
-
-An Installation Script for Home Assistant OS.
-
-This is the script which handles all the heavy lifting. When an installation is started, the script probes the VM to find its drive path, then queries the GitHub API to fetch the latest HAOS release data. At this time, the script is only intended to run in a TrueNAS VM and it expects a single drive to be present (it will trigger an error and exit if multiple drives are detected). For now, the script will always download and install the current release of HAOS. If there is any interest, the ability to choose which version to install may be added in the future.
-
-![Main Menu Interface](img/Screenshot_26.11.3-mini.png)
-
-
 
 ## License
 Apache License 2.0 - The full text is in the LICENSE file.
