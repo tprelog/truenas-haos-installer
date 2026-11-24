@@ -1,0 +1,51 @@
+name: Build HAOS Installation ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '[0-9][0-9].*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install archiso
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm archiso
+
+      - name: Build ISO and generate checksum
+        run: |
+          mkdir -p /tmp/archiso-work ./iso
+          mkarchiso -v -w /tmp/archiso-work -o ./iso .
+          cd ./iso
+          sha256sum *.iso > "$(ls *.iso).sha256"
+
+      - name: Upload test artifact (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: haos-installation-iso-test
+          path: ./iso/*.iso
+          archive: false
+
+      - name: Create Draft Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            ./iso/*.iso
+            ./iso/*.sha256
