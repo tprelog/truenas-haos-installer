@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-iso_name="truenas-haos-installer"
+iso_name="haos-ova-installer"
 iso_label="HAOS_INSTALLER_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
-iso_publisher="tprelog <https://github.com>"
-iso_application="HAOS Installation ISO for a TrueNAS VM"
+iso_publisher="tprelog <https://github.com/tprelog/truenas-haos-installer>"
+iso_application="HAOS OVA Installation ISO for Virtual Machines"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)-mini"
 install_dir="arch"
 bootmodes=('uefi-x64.systemd-boot.esp'
