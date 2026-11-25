@@ -8,7 +8,7 @@
 # - SCRIPT METADATA AND VERSION CONTROL
 # ==============================================================================
 # Script Name:  install-haos
-# Version:      26.11.3
+# Version:      26.11.4
 # Description:  Install Home Assistant OS in a Virtual Machine
 # ==============================================================================
 
@@ -65,26 +65,28 @@ probe_disk() {
   else
     # NOTE: Could add code here for selecting correct disk from a menu
     echo -e "\n${red}ERROR:${end} Multiple disks detected"
-    echo "${disks[@]}"
+    echo -e "${disks[*]}\n"
     return 1
   fi
 }
 
 
 get_haos_info() {
-  local api_url="https://api.github.com/repos/home-assistant/operating-system/releases"
-  local response ova_asset
-  echo "Fetching latest release info from GitHub..."
-  response=$(curl -sL "${api_url}")
+  local response
+  echo "Fetching latest HAOS release info..."
+  HAOS_VERSION=$(curl -sL "https://version.home-assistant.io/stable.json" | jq -r '.hassos.ova // empty')
+  if [ -z "${HAOS_VERSION}" ]; then
+    echo -e "\n${red}ERROR:${end} Could not determine HAOS version\n"
+    return 1
+  fi
+  response=$(curl -sL "https://api.github.com/repos/home-assistant/operating-system/releases/tags/${HAOS_VERSION}")
   if [ -z "${response}" ] || ! echo "${response}" | jq -e . >/dev/null 2>&1; then
     echo -e "\n${red}ERROR:${end} Invalid JSON\n"
     return 1
   fi
-  ova_asset=$(echo "${response}" | jq -c '[ .[] | select(.prerelease == false) | .assets[] | select(.name | test("ova.*qcow2\\.xz")) ] | first')
-  HAOS_VERSION=$(echo "${response}" | jq -r '[ .[] | select(.prerelease == false) | select(.assets[].name | test("ova.*qcow2\\.xz")) ] | first | .tag_name')
-  IMAGE_NAME=$(echo "${ova_asset}" | jq -r '.name' | sed 's/\.xz$//')
-  DOWNLOAD_URL=$(echo "${ova_asset}" | jq -r '.browser_download_url')
-  if [ -z "${DOWNLOAD_URL}" ] || [ "${DOWNLOAD_URL}" = "null" ]; then
+  IMAGE_NAME=$(echo "${response}" | jq -r '[ .assets[] | select(.name | test("ova.*qcow2\\.xz")) ] | first | .name // empty' | sed 's/\.xz$//')
+  DOWNLOAD_URL=$(echo "${response}" | jq -r '[ .assets[] | select(.name | test("ova.*qcow2\\.xz")) ] | first | .browser_download_url // empty')
+  if [ -z "${DOWNLOAD_URL}" ] || [ -z "${IMAGE_NAME}" ]; then
     echo -e "\n${red}ERROR:${end} Download URL not found\n"
     return 1
   fi
@@ -140,10 +142,10 @@ get_script_version() {
 
 show_info() {
   echo -e "${blu}SCRIPT VERSION:${end} ${SCRIPT_VERSION}"
-  echo -e "${blu}TARGET DISK:${end} ${TARGET_DISK}"
-  echo -e "${blu}HAOS VERSION:${end} ${HAOS_VERSION}"
-  echo -e "${blu}IMAGE NAME:${end} ${IMAGE_NAME}"
-  echo -e "${blu}DOWNLOAD URL:${end} ${DOWNLOAD_URL}"
+  echo -e "${blu}TARGET DISK:${end} ${TARGET_DISK:-${orn}NOT SET${end}}"
+  echo -e "${blu}HAOS VERSION:${end} ${HAOS_VERSION:-${orn}NOT SET${end}}"
+  echo -e "${blu}IMAGE NAME:${end} ${IMAGE_NAME:-${orn}NOT SET${end}}"
+  echo -e "${blu}DOWNLOAD URL:${end} ${DOWNLOAD_URL:-${orn}NOT SET${end}}"
 }
 
 # shellcheck disable=SC2034
@@ -179,9 +181,9 @@ load_colors
 while true; do
   show_banner
   echo " 1) Install HAOS"
-  echo " 2) Show Verification"
-  echo " 3) Reboot System"
-  echo " 4) Shutdown System"
+  echo " 2) Install Info"
+  echo " 3) Shutdown System"
+  echo " 4) Reboot System"
   echo " 5) Exit to Console"
   echo ""
   
@@ -204,24 +206,23 @@ while true; do
         pause; continue
       fi
       echo ""
-      # Download and Install
       download_haos || { pause; continue; }
       install_haos || { pause; continue; }
       pause
       ;;
-    "2"|[vV]|[vV][eE][rR][iI][fF][yY])
+    "2")
       get_script_version
-      probe_disk || { pause; continue; }
-      get_haos_info || { pause; continue; }
+      probe_disk
+      get_haos_info
       echo ""
       show_info
       pause
       ;;
-    "3"|[rR]|[rR][eE][bB][oO][oO][tT])
-      echo -e "\n${red}Rebooting...${end}" ; reboot
-      ;;
-    "4"|[sS]|[sS][hH][uU][tT][dD][oO][wW][nN])
+    "3"|[sS]|[sS][hH][uU][tT][dD][oO][wW][nN])
       echo -e "\n${red}Powering off...${end}" ; poweroff
+      ;;
+    "4"|[rR]|[rR][eE][bB][oO][oO][tT])
+      echo -e "\n${red}Rebooting...${end}" ; reboot
       ;;
     "5"|[eE]|[eE][xX][iI][tT]|[qQ])
       goodbye
